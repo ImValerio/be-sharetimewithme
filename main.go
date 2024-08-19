@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,7 @@ type Instance struct {
 }
 
 func main() {
+	fmt.Println("Starting server...")
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")

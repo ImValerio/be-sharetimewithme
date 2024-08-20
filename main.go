@@ -32,9 +32,9 @@ func main() {
 	// }
 
 	// Get environment variables
-	dbURI := os.Getenv("DB_URI")
-	dbName := os.Getenv("DB_NAME")
-	dbCollectionName := os.Getenv("DB_COLLECTION")
+	dbURI := os.Getenv("_DB_URI")
+	dbName := os.Getenv("_DB_NAME")
+	dbCollectionName := os.Getenv("_DB_COLLECTION")
 	// MongoDB setup
 	clientOptions := options.Client().ApplyURI(dbURI)
 	client, err := mongo.Connect(context.TODO(), clientOptions)

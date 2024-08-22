@@ -27,9 +27,12 @@ type Instance struct {
 
 func main() {
 	fmt.Println("Starting server...")
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file", err)
+
+	if os.Getenv("env") != "prod" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatal("Error loading .env file", err)
+		}
 	}
 
 	// Get environment variables

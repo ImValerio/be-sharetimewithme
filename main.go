@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -26,10 +27,10 @@ type Instance struct {
 
 func main() {
 	fmt.Println("Starting server...")
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file", err)
-	// }
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file", err)
+	}
 
 	// Get environment variables
 	dbURI := os.Getenv("DB_URI")
@@ -129,7 +130,8 @@ func main() {
 	})
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hi"))
+
+		w.Write([]byte("hello world"))
 	})
 
 	port := os.Getenv("PORT")
@@ -140,7 +142,7 @@ func main() {
 
 	// Start HTTP server.
 	log.Printf("listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
 }

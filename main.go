@@ -22,7 +22,14 @@ import (
 
 type Instance struct {
 	InstanceID  string   `json:"instanceId"`
+	Username    string   `json:"username"`
 	BinaryWeeks []string `json:"binaryWeeks"`
+}
+
+type MongoRecord struct {
+	InstanceID  string
+	Username    string
+	BinaryWeeks string
 }
 
 func main() {
@@ -81,6 +88,7 @@ func main() {
 
 		_, err = collection.InsertOne(ctx, bson.M{
 			"instanceId":  rv.InstanceID,
+			"username":    rv.Username,
 			"binaryWeeks": rv.BinaryWeeks,
 		})
 		if err != nil {
@@ -120,6 +128,7 @@ func main() {
 
 		_, err = collection.InsertOne(ctx, bson.M{
 			"instanceId":  rv.InstanceID,
+			"username":    rv.Username,
 			"binaryWeeks": strings.Join(rv.BinaryWeeks, "|"),
 		})
 		if err != nil {
@@ -132,9 +141,42 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"instanceId": rv.InstanceID})
 	})
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/instance/{id}", func(w http.ResponseWriter, r *http.Request) {
 
-		w.Write([]byte("hello world"))
+		id := chi.URLParam(r, "id")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Insert document into MongoDB
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		cursor, err := collection.Find(ctx, bson.M{"instanceId": id})
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer cursor.Close(ctx)
+
+		var records []MongoRecord
+		if err = cursor.All(ctx, &records); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var instances []Instance
+		for _, data := range records {
+			instances = append(instances, Instance{
+				InstanceID:  data.InstanceID,
+				Username:    data.Username,
+				BinaryWeeks: strings.Split(data.BinaryWeeks, "|"),
+			})
+		}
+
+		json.NewEncoder(w).Encode(instances)
 	})
 
 	port := os.Getenv("PORT")

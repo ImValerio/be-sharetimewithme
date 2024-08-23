@@ -140,6 +140,49 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"instanceId": rv.InstanceID})
 	})
+	r.Post("/instance", func(w http.ResponseWriter, r *http.Request) {
+			var rv Instance
+			dec := json.NewDecoder(r.Body)
+			err := dec.Decode(&rv)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			if rv.InstanceID == "" || rv.Username == "" || len(rv.BinaryWeeks) == 0 {
+				http.Error(w, "Missing required fields", http.StatusBadRequest)
+				return
+			}
+
+			for _, week := range rv.BinaryWeeks {
+
+				isBinaryWeek := IsBinaryString(week)
+				if !isBinaryWeek || len(week) != 7 {
+					http.Error(w, "Invalid data :(", http.StatusBadRequest)
+					return
+				}
+			}
+
+
+			// Insert document into MongoDB
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			_, err = collection.InsertOne(ctx, bson.M{
+				"instanceId":  rv.InstanceID,
+				"username":    rv.Username,
+				"binaryWeeks": strings.Join(rv.BinaryWeeks, "|"),
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			// Return the generated instanceId
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"instanceId": rv.InstanceID})
+	})
 
 	r.Get("/instance/{id}", func(w http.ResponseWriter, r *http.Request) {
 

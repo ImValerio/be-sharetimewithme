@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"strconv"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -31,6 +32,8 @@ type MongoRecord struct {
 	Username    string
 	BinaryWeeks string
 }
+
+
 
 func main() {
 	fmt.Println("Starting server...")
@@ -72,32 +75,6 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// POST endpoint to store data with provided instanceId in MongoDB
-	r.Post("/store", func(w http.ResponseWriter, r *http.Request) {
-		var rv Instance
-		dec := json.NewDecoder(r.Body)
-		err := dec.Decode(&rv)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Insert document into MongoDB
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		_, err = collection.InsertOne(ctx, bson.M{
-			"instanceId":  rv.InstanceID,
-			"username":    rv.Username,
-			"binaryWeeks": rv.BinaryWeeks,
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Write([]byte("Data stored successfully"))
-	})
 
 	// POST endpoint to generate a unique instanceId and store data in MongoDB
 	r.Post("/generate", func(w http.ResponseWriter, r *http.Request) {
@@ -110,13 +87,19 @@ func main() {
 			return
 		}
 
-		for _, week := range rv.BinaryWeeks {
+		for i, week := range rv.BinaryWeeks {
 
 			isBinaryWeek := IsBinaryString(week)
 			if !isBinaryWeek || len(week) != 7 {
 				http.Error(w, "Invalid data :(", http.StatusBadRequest)
 				return
 			}
+			decimalWeek, err:=  convertBinaryToDecimal(week)
+			if err != nil {
+				http.Error(w, "There was an issue during the conversion process :(", http.StatusInternalServerError)
+				return
+			}
+			rv.BinaryWeeks[i] = strconv.FormatInt(decimalWeek, 10)
 		}
 
 		// Generate a new UUID for instanceId
@@ -155,13 +138,20 @@ func main() {
 				return
 			}
 
-			for _, week := range rv.BinaryWeeks {
+			for i, week := range rv.BinaryWeeks {
 
 				isBinaryWeek := IsBinaryString(week)
 				if !isBinaryWeek || len(week) != 7 {
 					http.Error(w, "Invalid data :(", http.StatusBadRequest)
 					return
 				}
+ 				decimalWeek, err := convertBinaryToDecimal(week)
+				if err != nil {
+					http.Error(w, "There was an issue during the conversion process :(", http.StatusInternalServerError)
+					return
+				}
+
+				rv.BinaryWeeks[i] = strconv.FormatInt(decimalWeek, 10)
 			}
 
 
@@ -215,7 +205,7 @@ func main() {
 			instances = append(instances, Instance{
 				InstanceID:  data.InstanceID,
 				Username:    data.Username,
-				BinaryWeeks: strings.Split(data.BinaryWeeks, "|"),
+				BinaryWeeks: convertDecimalWeekToBinary(data.BinaryWeeks),
 			})
 		}
 
@@ -242,4 +232,17 @@ func IsBinaryString(s string) bool {
 		}
 	}
 	return true
+}
+func convertBinaryToDecimal(week string) (int64,error) {
+	return strconv.ParseInt(week, 2, 8)
+}
+
+func convertDecimalWeekToBinary(binaryWeeks string) []string {
+	weeks := strings.Split(binaryWeeks, "|")
+	for i, week := range weeks {
+		if num, err := strconv.ParseInt(week, 10, 8); err == nil {
+			weeks[i] = fmt.Sprintf("%07b", num)
+		}
+	}
+	return weeks
 }

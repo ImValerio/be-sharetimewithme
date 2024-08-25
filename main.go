@@ -159,6 +159,17 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
+			// Check if the username already exists for the specific instanceId
+			count, err := collection.CountDocuments(ctx, bson.M{"instanceId": rv.InstanceID, "username": rv.Username})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if count > 0 {
+				http.Error(w, "Username already exists for this instance", http.StatusBadRequest)
+				return
+			}
+
 			_, err = collection.InsertOne(ctx, bson.M{
 				"instanceId":  rv.InstanceID,
 				"username":    rv.Username,
@@ -210,6 +221,30 @@ func main() {
 		}
 
 		json.NewEncoder(w).Encode(instances)
+	})
+	r.Delete("/instance/{id}/{username}", func(w http.ResponseWriter, r *http.Request) {
+
+			id := chi.URLParam(r, "id")
+			username := chi.URLParam(r, "username")
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			filter := bson.M{"instanceId": id, "username": username}
+			result, err := collection.DeleteOne(ctx, filter)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if result.DeletedCount == 0 {
+				http.Error(w, "No records found to delete", http.StatusNotFound)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{"message": "Record deleted successfully"})
 	})
 
 	port := os.Getenv("PORT")

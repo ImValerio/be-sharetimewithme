@@ -25,12 +25,14 @@ type Instance struct {
 	InstanceID  string   `json:"instanceId"`
 	Username    string   `json:"username"`
 	BinaryWeeks []string `json:"binaryWeeks"`
+	CreationDate string `json:"creationDate"`
 }
 
 type MongoRecord struct {
 	InstanceID  string
 	Username    string
 	BinaryWeeks string
+	CreationDate string
 }
 
 
@@ -76,53 +78,6 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 
-	// POST endpoint to generate a unique instanceId and store data in MongoDB
-	r.Post("/generate", func(w http.ResponseWriter, r *http.Request) {
-		var rv Instance
-		dec := json.NewDecoder(r.Body)
-		err := dec.Decode(&rv)
-
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		for i, week := range rv.BinaryWeeks {
-
-			isBinaryWeek := IsBinaryString(week)
-			if !isBinaryWeek || len(week) != 7 {
-				http.Error(w, "Invalid data :(", http.StatusBadRequest)
-				return
-			}
-			decimalWeek, err:=  convertBinaryToDecimal(week)
-			if err != nil {
-				http.Error(w, "There was an issue during the conversion process :(", http.StatusInternalServerError)
-				return
-			}
-			rv.BinaryWeeks[i] = strconv.FormatInt(decimalWeek, 10)
-		}
-
-		// Generate a new UUID for instanceId
-		rv.InstanceID = uuid.New().String()
-
-		// Insert document into MongoDB
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		_, err = collection.InsertOne(ctx, bson.M{
-			"instanceId":  rv.InstanceID,
-			"username":    rv.Username,
-			"binaryWeeks": strings.Join(rv.BinaryWeeks, "|"),
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Return the generated instanceId
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"instanceId": rv.InstanceID})
-	})
 	r.Post("/instance", func(w http.ResponseWriter, r *http.Request) {
 			var rv Instance
 			dec := json.NewDecoder(r.Body)
@@ -133,9 +88,13 @@ func main() {
 				return
 			}
 
-			if rv.InstanceID == "" || rv.Username == "" || len(rv.BinaryWeeks) == 0 {
+			if  rv.Username == "" || len(rv.BinaryWeeks) == 0 {
 				http.Error(w, "Missing required fields", http.StatusBadRequest)
 				return
+			}
+
+			if rv.InstanceID == ""{
+				rv.InstanceID = uuid.New().String()
 			}
 
 			for i, week := range rv.BinaryWeeks {
@@ -170,10 +129,17 @@ func main() {
 				return
 			}
 
+			creationDate := time.Now().Format("2006/01/02")
+
+			if rv.InstanceID != "" {
+				creationDate = getCreationDateByInstanceId(collection, rv.InstanceID)
+			}
+			
 			_, err = collection.InsertOne(ctx, bson.M{
 				"instanceId":  rv.InstanceID,
 				"username":    rv.Username,
 				"binaryWeeks": strings.Join(rv.BinaryWeeks, "|"),
+				"creationDate": creationDate,
 			})
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -184,7 +150,7 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"instanceId": rv.InstanceID})
 	})
-
+	
 	r.Get("/instance/{id}", func(w http.ResponseWriter, r *http.Request) {
 
 		id := chi.URLParam(r, "id")
@@ -217,6 +183,7 @@ func main() {
 				InstanceID:  data.InstanceID,
 				Username:    data.Username,
 				BinaryWeeks: convertDecimalWeekToBinary(data.BinaryWeeks),
+				CreationDate: data.CreationDate,
 			})
 		}
 
@@ -268,6 +235,7 @@ func IsBinaryString(s string) bool {
 	}
 	return true
 }
+
 func convertBinaryToDecimal(week string) (int64,error) {
 	return strconv.ParseInt(week, 2, 8)
 }
@@ -281,3 +249,16 @@ func convertDecimalWeekToBinary(binaryWeeks string) []string {
 	}
 	return weeks
 }
+
+func getCreationDateByInstanceId(collection *mongo.Collection, id string) string{
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		var result MongoRecord
+		err := collection.FindOne(ctx, bson.M{"instanceId": id}).Decode(&result)
+		if err != nil {
+			return "" 
+		}
+
+		return result.CreationDate
+	}

@@ -52,6 +52,12 @@ func setRoutes(r *chi.Mux, collection *mongo.Collection) {
 			return
 		}
 
+		creationDate := time.Now().Format("2006/01/02")
+
+		if rv.InstanceID != "" {
+			creationDate = getCreationDateByInstanceId(collection, rv.InstanceID)
+		}
+
 		if rv.InstanceID == "" {
 			rv.InstanceID = uuid.New().String()
 		}
@@ -85,12 +91,6 @@ func setRoutes(r *chi.Mux, collection *mongo.Collection) {
 		if count > 0 {
 			http.Error(w, "Username already exists for this instance", http.StatusBadRequest)
 			return
-		}
-
-		creationDate := time.Now().Format("2006/01/02")
-
-		if rv.InstanceID != "" {
-			creationDate = getCreationDateByInstanceId(collection, rv.InstanceID)
 		}
 
 		_, err = collection.InsertOne(ctx, bson.M{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -19,8 +21,12 @@ import (
 func getRouterAndSetupMiddlewares() *chi.Mux {
 
 	r := chi.NewRouter()
+	allowedOrigins := []string{"https://www.sharetimewith.me", "http://www.sharetimewith.me"}
+	if os.Getenv("ENV") != "prod" {
+		allowedOrigins = []string{"https://*", "http://*"}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -31,7 +37,7 @@ func getRouterAndSetupMiddlewares() *chi.Mux {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-
+	r.Use(httprate.LimitByIP(10, time.Minute))
 	return r
 }
 
